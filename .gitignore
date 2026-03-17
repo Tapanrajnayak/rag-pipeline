@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# uv
+uv.lock  # commit this in application repos
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.hypothesis/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment (NEVER commit secrets)
+.env
+.env.*
+!.env.example
+
+# Secrets baseline (commit this)
+# .secrets.baseline
+
+# Docker
+*.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

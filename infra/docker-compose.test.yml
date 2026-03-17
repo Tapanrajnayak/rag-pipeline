@@ -1,0 +1,27 @@
+version: "3.9"
+
+# Isolated test stack — no Cohere calls (mocked via respx in tests)
+# Qdrant and Redis are real services for integration tests.
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.9.2
+    ports:
+      - "6333:6333"
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10

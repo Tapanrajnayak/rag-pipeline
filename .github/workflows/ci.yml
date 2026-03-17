@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  UV_VERSION: "0.2.15"
+
+jobs:
+  lint:
+    name: Lint & type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dev dependencies
+        run: uv sync --frozen
+
+      - name: ruff lint
+        run: uv run ruff check src/ tests/
+
+      - name: ruff format check
+        run: uv run ruff format --check src/ tests/
+
+      - name: mypy strict
+        run: uv run mypy src/rag/
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run unit tests
+        env:
+          COHERE_API_KEY: test_cohere_key_00000000000000000000
+          JWT_SECRET_KEY: test_jwt_secret_key_at_least_32_bytes!!
+        run: |
+          uv run pytest tests/unit/ \
+            --cov=src/rag \
+            --cov-report=xml \
+            --cov-fail-under=85 \
+            -v
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
+          fail_ci_if_error: false
+
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.9.2
+        ports:
+          - 6333:6333
+        options: >-
+          --health-cmd "curl -f http://localhost:6333/readyz"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run integration tests
+        env:
+          COHERE_API_KEY: test_cohere_key_00000000000000000000
+          JWT_SECRET_KEY: test_jwt_secret_key_at_least_32_bytes!!
+          QDRANT_URL: http://localhost:6333
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          uv run pytest tests/integration/ -v
+
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: rag-pipeline:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Check image size
+        run: |
+          SIZE=$(docker image inspect rag-pipeline:ci --format='{{.Size}}')
+          MAX_BYTES=$((300 * 1024 * 1024))
+          echo "Image size: $SIZE bytes (max: $MAX_BYTES)"
+          if [ "$SIZE" -gt "$MAX_BYTES" ]; then
+            echo "ERROR: Image exceeds 300MB limit"
+            exit 1
+          fi
