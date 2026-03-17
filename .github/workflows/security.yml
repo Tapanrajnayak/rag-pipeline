@@ -1,14 +1,7 @@
 name: Security Audit
 
 on:
-  schedule:
-    - cron: "0 6 * * 1"  # Every Monday at 06:00 UTC
-  push:
-    branches: [main]
-    paths:
-      - "pyproject.toml"
-      - "uv.lock"
-      - "Dockerfile"
+  workflow_dispatch:
 
 jobs:
   dependency-audit:
